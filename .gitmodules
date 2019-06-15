@@ -1,0 +1,3 @@
+[submodule "backtest/pybind11"]
+	path = backtest/pybind11
+	url = https://github.com/pybind/pybind11
