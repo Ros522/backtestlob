@@ -50,49 +50,49 @@ public:
 		return orders;
 	}
 
-	float add_position(Order newpos) {
+	float add_position(Order neworder) {
 		float profit = 0;
 		if (this->position.side >= Side::BUY) {
-			if (newpos.side == this->position.side) {
-				float sum_size = this->position.size + newpos.size;
-				float newprice = (this->position.size * this->position.price + newpos.size*newpos.price) / sum_size;
+			if (neworder.side == this->position.side) {
+				float sum_size = this->position.size + neworder.size;
+				float newprice = (this->position.size * this->position.price + neworder.size*neworder.price) / sum_size;
 
-				Position newposion = { newpos.side, sum_size, newprice };
+				Position newposion = { neworder.side, sum_size, newprice };
 				this->position = newposion;
 			}
-			else if (newpos.side == Side::BUY && this->position.side == Side::SELL) {
-				float after_size = this->position.size - newpos.size;
+			else if (neworder.side == Side::BUY && this->position.side == Side::SELL) {
+				float after_size = this->position.size - neworder.size;
 
 				float ex_size = this->position.size - std::max(0.0f, after_size);
 
-				profit = (this->position.price - newpos.price)*ex_size;
+				profit = (this->position.price - neworder.price)*ex_size;
 
 				if (after_size > 0.0f) {
 					Position newposion = { Side::SELL,after_size,this->position.price };
 					this->position = newposion;
 				}
 				else if (after_size < 0.0f) {
-					Position newposion = { Side::BUY,std::abs(after_size),newpos.price };
+					Position newposion = { Side::BUY,std::abs(after_size),neworder.price };
 					this->position = newposion;
 				}
 				else {
 					this->position = { Side::UNDEF,0,0 };
 				}
 			}
-			else if (newpos.side == Side::SELL && this->position.side == Side::BUY) {
+			else if (neworder.side == Side::SELL && this->position.side == Side::BUY) {
 
-				float after_size = this->position.size - newpos.size;
+				float after_size = this->position.size - neworder.size;
 
 				float ex_size = this->position.size - std::max(0.0f, after_size);
 
-				profit = (newpos.price- this->position.price)*ex_size;
+				profit = (neworder.price- this->position.price)*ex_size;
 
 				if (after_size > 0.0f) {
 					Position newposion = { Side::BUY,after_size,this->position.price };
 					this->position = newposion;
 				}
 				else if (after_size < 0.0f) {
-					Position newposion = { Side::SELL,std::abs(after_size),newpos.price };
+					Position newposion = { Side::SELL,std::abs(after_size),neworder.price };
 					this->position = newposion;
 				}
 				else {
@@ -102,7 +102,8 @@ public:
 		}
 		else
 		{
-			this->position = { newpos.side,newpos.size,newpos.price };
+			// IF SIDE= UNDEF
+			this->position = { neworder.side,neworder.size,neworder.price };
 		}
 		return profit;
 	}
@@ -137,6 +138,9 @@ public:
 				case OrderType::MARKET:
 					// 常に約定している
 					trade++;
+					// 買いの場合、HIGHで約定させる(売りもまた同様）
+					if(o.side == Side::BUY) o.price = high;
+					if (o.side == Side::SELL) o.price = low;
 					profit += this->add_position(o);
 					it = this->orders.erase(it);
 					break;
@@ -173,10 +177,17 @@ public:
 					}
 					break;
 				case OrderType::MARKET:
-					// 常に約定している
-					trade++;
-					profit += this->add_position(o);
-					it = this->orders.erase(it);
+					// 同サイドのTickならば約定していると判定する
+					if(o.side == side)
+					{
+						trade++;
+						profit += this->add_position(o);
+						it = this->orders.erase(it);
+					}
+					else
+					{
+						it++;
+					}
 					break;
 			}
 

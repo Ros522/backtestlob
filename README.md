@@ -7,7 +7,8 @@ pip3 install git+https://github.com/Ros522/backtestlob
 
 # 将来的な機能
 1. 成行のシミュレーション  
-※現行はentry時の価格にて常に約定するとして仮実装
+※現行はlow-highの場合、常に不利価格で約定すると判定（売り成行はHIGH価格で約定）  
+　bytickの場合、次にきた同サイドの注文の価格にて約定すると判定
 1. 取引所遅延のシミュレーション
 1. 取引所APIラッパー
 1. ビジュアライゼーション（by Python）
@@ -18,7 +19,7 @@ pip3 install git+https://github.com/Ros522/backtestlob
 3. 約定したら内部のポジションを更新して、その注文約定の収支、トレード回数返す
 4. 注文はネットアウト注文として保持する
 5. 安値、高値入力で約定判定(step)、または1約定履歴流し込み(step_by_tick)
-6. 成行できない？
+6. 成行は試験中
 
 ## exported class
 * OrderType
