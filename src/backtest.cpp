@@ -165,7 +165,7 @@ public:
 						profit += this->add_position(o);
 						it = this->orders.erase(it);
 					}
-					else if (side == Side::SELL && o.side == Side::SELL && o.price > price) {
+					else if (side == Side::SELL && o.side == Side::BUY && o.price > price) {
 					//売り履歴の場合、買い注文を見る
 						trade++;
 						profit += this->add_position(o);
@@ -181,6 +181,7 @@ public:
 					if(o.side == side)
 					{
 						trade++;
+						o.price = price;
 						profit += this->add_position(o);
 						it = this->orders.erase(it);
 					}
