@@ -1,21 +1,35 @@
-﻿// backtest.cpp : アプリケーションのエントリ ポイントを定義します。
-//
-
-#include <pybind11/pybind11.h>
+﻿#include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
 
-struct Order {
-	int side;
-	float size;
-	float price;
-};
-
 class BackTestEnv {
-private:
+public:
+	enum Side {
+		UNDEF = -1,
+		BUY = 0,
+		SELL = 1
+	};
 
-	Order position = { -1,0,0 };
+	enum OrderType {
+		LIMIT = 0,
+		MARKET = 1
+	};
+
+	struct Order {
+		OrderType type;
+		Side side;
+		float size;
+		float price;
+	};
+
+	struct Position {
+		Side side;
+		float size;
+		float price;
+	};
+private:
+	Position position = { Side::UNDEF,0,0 };
 	std::map<long,Order> orders;
 	long seq = 0;
 
@@ -23,7 +37,7 @@ public:
 	BackTestEnv() {
 	}
 
-	float get_position_side() {
+	Side get_position_side() {
 		return this->position.side;
 	}
 	float get_position_size() {
@@ -38,15 +52,15 @@ public:
 
 	float add_position(Order newpos) {
 		float profit = 0;
-		if (this->position.side >= 0) {
+		if (this->position.side >= Side::BUY) {
 			if (newpos.side == this->position.side) {
 				float sum_size = this->position.size + newpos.size;
 				float newprice = (this->position.size * this->position.price + newpos.size*newpos.price) / sum_size;
 
-				Order newposion = { newpos.side, sum_size, newprice };
+				Position newposion = { newpos.side, sum_size, newprice };
 				this->position = newposion;
 			}
-			else if (newpos.side == 0 && this->position.side == 1) {
+			else if (newpos.side == Side::BUY && this->position.side == Side::SELL) {
 				float after_size = this->position.size - newpos.size;
 
 				float ex_size = this->position.size - std::max(0.0f, after_size);
@@ -54,18 +68,18 @@ public:
 				profit = (this->position.price - newpos.price)*ex_size;
 
 				if (after_size > 0.0f) {
-					Order newposion = { 1,after_size,this->position.price };
+					Position newposion = { Side::SELL,after_size,this->position.price };
 					this->position = newposion;
 				}
 				else if (after_size < 0.0f) {
-					Order newposion = { 0,std::abs(after_size),newpos.price };
+					Position newposion = { Side::BUY,std::abs(after_size),newpos.price };
 					this->position = newposion;
 				}
 				else {
-					this->position = { -1,0,0 };
+					this->position = { Side::UNDEF,0,0 };
 				}
 			}
-			else if (newpos.side == 1 && this->position.side == 0) {
+			else if (newpos.side == Side::SELL && this->position.side == Side::BUY) {
 
 				float after_size = this->position.size - newpos.size;
 
@@ -74,21 +88,21 @@ public:
 				profit = (newpos.price- this->position.price)*ex_size;
 
 				if (after_size > 0.0f) {
-					Order newposion = { 0,after_size,this->position.price };
+					Position newposion = { Side::BUY,after_size,this->position.price };
 					this->position = newposion;
 				}
 				else if (after_size < 0.0f) {
-					Order newposion = { 1,std::abs(after_size),newpos.price };
+					Position newposion = { Side::SELL,std::abs(after_size),newpos.price };
 					this->position = newposion;
 				}
 				else {
-					this->position = { -1,0,0 };
+					this->position = { Side::UNDEF,0,0 };
 				}
 			}
 		}
 		else
 		{
-			this->position = newpos;
+			this->position = { newpos.side,newpos.size,newpos.price };
 		}
 		return profit;
 	}
@@ -101,56 +115,77 @@ public:
 			//約定チェック
 			Order o = it->second;
 
-			//売り注文
-			if (o.side == 1 && o.price < high) {
-				//約定している
-				trade++;
-				profit += this->add_position(o);
-				it = this->orders.erase(it);
-			}
-			else if(o.side == 0 && o.price > low){
-				//約定している
-				trade++;
-				profit += this->add_position(o);
-				it = this->orders.erase(it);
-			}
-			else{
-				it++;
+			switch (o.type) {
+				case OrderType::LIMIT:
+					//売り注文
+					if (o.side == Side::SELL && o.price < high) {
+						//約定している
+						trade++;
+						profit += this->add_position(o);
+						it = this->orders.erase(it);
+					}
+					else if (o.side == Side::BUY && o.price > low) {
+						//約定している
+						trade++;
+						profit += this->add_position(o);
+						it = this->orders.erase(it);
+					}
+					else {
+						it++;
+					}
+					break;
+				case OrderType::MARKET:
+					// 常に約定している
+					trade++;
+					profit += this->add_position(o);
+					it = this->orders.erase(it);
+					break;
 			}
 		}
 		return std::forward_as_tuple(profit, trade);
 	}
 
-	std::tuple<float, int> step2(int side, float price) {
+	std::tuple<float, int> step_by_tick(Side side, float price) {
 		std::map<long, Order>::iterator it = this->orders.begin();
 		int trade = 0;
 		float profit = 0;
 		while (it != this->orders.end()) {
 			//約定チェック
 			Order o = it->second;
-			//買い履歴の場合、売り注文を見る
-			if (side == 0 && o.side == 1 && o.price < price) {
-				//約定している
-				trade++;
-				profit += this->add_position(o);
-				it = this->orders.erase(it);
+			switch (o.type) {
+				case OrderType::LIMIT:
+					//買い履歴の場合、売り注文を見る
+					if (side == Side::BUY && o.side == Side::SELL && o.price < price) {
+						//約定している
+						trade++;
+						profit += this->add_position(o);
+						it = this->orders.erase(it);
+					}
+					else if (side == Side::SELL && o.side == Side::SELL && o.price > price) {
+					//売り履歴の場合、買い注文を見る
+						trade++;
+						profit += this->add_position(o);
+						it = this->orders.erase(it);
+					}
+					else
+					{
+						it++;
+					}
+					break;
+				case OrderType::MARKET:
+					// 常に約定している
+					trade++;
+					profit += this->add_position(o);
+					it = this->orders.erase(it);
+					break;
 			}
-			else if (side == 1 && o.side == 0 && o.price > price) {
-			//売り履歴の場合、買い注文を見る
-				trade++;
-				profit += this->add_position(o);
-				it = this->orders.erase(it);
-			}
-			else
-			{
-				it++;
-			}
+
 		}
 		return std::forward_as_tuple(profit, trade);
 	}
 
-	long entry(int side, double size, float price) {
-		Order o = { side,size,price };
+	long entry(OrderType type ,Side side, float size, float price) {
+		Order o = { type,side,size,price };
 		this->seq++;
 		orders[this->seq] = o;
 		return this->seq;
@@ -163,7 +198,7 @@ public:
 		orders.erase(id);
 		return 0;
 	};
-	void cancelAll() {
+	void cancel_all() {
 		orders.clear();
 	};
 };
@@ -171,22 +206,32 @@ public:
 PYBIND11_MODULE(backtestlob, m) {
 	m.doc() = "backtestlob";
 
-	py::class_<Order>(m, "Order")
+	py::enum_<BackTestEnv::OrderType>(m, "OrderType")
+		.value("LIMIT", BackTestEnv::OrderType::LIMIT)
+		.value("MARKET", BackTestEnv::OrderType::MARKET)
+		.export_values();
+
+	py::enum_<BackTestEnv::Side>(m, "Side")
+		.value("BUY", BackTestEnv::Side::BUY)
+		.value("SELL", BackTestEnv::Side::SELL)
+		.export_values();
+
+	py::class_<BackTestEnv::Order>(m, "Order")
 		.def(py::init())
-		.def_readwrite("side", &Order::side)
-		.def_readwrite("size", &Order::size)
-		.def_readwrite("price", &Order::price);
+		.def_readwrite("side", &BackTestEnv::Order::side)
+		.def_readwrite("size", &BackTestEnv::Order::size)
+		.def_readwrite("price", &BackTestEnv::Order::price);
 
 	py::class_<BackTestEnv>(m, "BackTestEnv")
 		.def(py::init())
-		.def("getPositionSide", &BackTestEnv::get_position_side)
-		.def("getPositionSize", &BackTestEnv::get_position_size)
-		.def("getPositionPrice", &BackTestEnv::get_position_price)
-		.def("getOrders", &BackTestEnv::get_orders)
+		.def_property_readonly("side", &BackTestEnv::get_position_side)
+		.def_property_readonly("size", &BackTestEnv::get_position_size)
+		.def_property_readonly("price", &BackTestEnv::get_position_price)
+		.def("get_orders", &BackTestEnv::get_orders)
 		.def("step", &BackTestEnv::step)
-		.def("step2", &BackTestEnv::step2)
+		.def("step_by_tick", &BackTestEnv::step_by_tick)
 		.def("entry", &BackTestEnv::entry)
 		.def("cancel", &BackTestEnv::cancel)
-		.def("cancelAll", &BackTestEnv::cancelAll)
+		.def("cancel_all", &BackTestEnv::cancel_all)
 		;
 }
