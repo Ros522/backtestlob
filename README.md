@@ -10,6 +10,7 @@ pip3 install git+https://github.com/Ros522/backtestlob
 ※現行はlow-highの場合、常に不利価格で約定すると判定（売り成行はHIGH価格で約定）  
 　bytickの場合、次にきた同サイドの注文の価格にて約定すると判定
 1. 取引所遅延のシミュレーション
+https://github.com/Ros522/lazy_backtest_lob
 1. 取引所APIラッパー
 1. ビジュアライゼーション（by Python）
 
