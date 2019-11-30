@@ -1,6 +1,10 @@
 # backtestlob
 Limit Order Book 指値戦略の高速バックテスト
 (on pybind11)
+```
+pip3 install git+https://github.com/Ros522/backtestlob
+```
+
 # 機能
 1. 買い指値に対して、「買い約定履歴 < 指値」　で注文の約定判定を行う 
 2. 売り指値に対して、「売り約定履歴 > 指値」　で注文の約定判定を行う 
@@ -8,11 +12,10 @@ Limit Order Book 指値戦略の高速バックテスト
 4. 注文はネットアウト注文として保持する
 5. 安値、高値入力で約定判定(step)、または1約定履歴流し込み(step2)
 6. 成行できない
-7. 個別でキャンセルできない cancelAllはある
 
 # イメージ
 ```
-from backtest import BackTestEnv
+from backtestlob import BackTestEnv
 env = BackTestEnv()
 #1枚買い
 env.entry(0,1,500000)
