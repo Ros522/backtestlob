@@ -118,7 +118,6 @@ public:
 
 			switch (o.type) {
 				case OrderType::LIMIT:
-					//売り注文
 					if (o.price < high && o.price > low) {
 						//約定している
 						trade++;
