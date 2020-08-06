@@ -119,13 +119,7 @@ public:
 			switch (o.type) {
 				case OrderType::LIMIT:
 					//売り注文
-					if (o.side == Side::SELL && o.price < high) {
-						//約定している
-						trade++;
-						profit += this->add_position(o);
-						it = this->orders.erase(it);
-					}
-					else if (o.side == Side::BUY && o.price > low) {
+					if (o.price < high && o.price > low) {
 						//約定している
 						trade++;
 						profit += this->add_position(o);
@@ -139,8 +133,8 @@ public:
 					// 常に約定している
 					trade++;
 					// 買いの場合、HIGHで約定させる(売りもまた同様）
-					if(o.side == Side::BUY) o.price = high;
-					if (o.side == Side::SELL) o.price = low;
+					//if(o.side == Side::BUY) o.price = high;
+					//if (o.side == Side::SELL) o.price = low;
 					profit += this->add_position(o);
 					it = this->orders.erase(it);
 					break;
