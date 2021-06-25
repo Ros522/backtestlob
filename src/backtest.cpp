@@ -108,9 +108,10 @@ public:
 		return profit;
 	}
 
-	std::tuple<float, int> step(float low, float high) {
+	std::tuple<float, int, float> step(float low, float high) {
 		std::map<long,Order>::iterator it = this->orders.begin();
 		int trade = 0;
+		float trade_sum = 0;
 		float profit = 0;
 		while(it != this->orders.end()) {
 			//約定チェック
@@ -121,12 +122,14 @@ public:
 					if (o.side == Side::SELL && o.price < high) {
 						//約定している
 						trade++;
+						trade_sum += o.size;
 						profit += this->add_position(o);
 						it = this->orders.erase(it);
 					}
 					else if (o.side == Side::BUY && o.price > low) {
 						//約定している
 						trade++;
+						trade_sum += o.size;
 						profit += this->add_position(o);
 						it = this->orders.erase(it);
 					}
@@ -137,6 +140,7 @@ public:
 				case OrderType::MARKET:
 					// 常に約定している
 					trade++;
+					trade_sum += o.size;
 					// 買いの場合、HIGHで約定させる(売りもまた同様）
 					//if(o.side == Side::BUY) o.price = high;
 					//if (o.side == Side::SELL) o.price = low;
@@ -145,12 +149,13 @@ public:
 					break;
 			}
 		}
-		return std::forward_as_tuple(profit, trade);
+		return std::forward_as_tuple(profit, trade, trade_sum);
 	}
 
-	std::tuple<float, int> step_by_tick(Side side, float price) {
+	std::tuple<float, int, float> step_by_tick(Side side, float price) {
 		std::map<long, Order>::iterator it = this->orders.begin();
 		int trade = 0;
+		float trade_sum = 0;
 		float profit = 0;
 		while (it != this->orders.end()) {
 			//約定チェック
@@ -161,12 +166,14 @@ public:
 					if (side == Side::BUY && o.side == Side::SELL && o.price < price) {
 						//約定している
 						trade++;
+						trade_sum += o.size;
 						profit += this->add_position(o);
 						it = this->orders.erase(it);
 					}
 					else if (side == Side::SELL && o.side == Side::BUY && o.price > price) {
 					//売り履歴の場合、買い注文を見る
 						trade++;
+						trade_sum += o.size;
 						profit += this->add_position(o);
 						it = this->orders.erase(it);
 					}
@@ -180,6 +187,7 @@ public:
 					if(o.side == side)
 					{
 						trade++;
+						trade_sum += o.size;
 						o.price = price;
 						profit += this->add_position(o);
 						it = this->orders.erase(it);
@@ -192,7 +200,7 @@ public:
 			}
 
 		}
-		return std::forward_as_tuple(profit, trade);
+		return std::forward_as_tuple(profit, trade, trade_sum);
 	}
 
 	long entry(OrderType type ,Side side, float size, float price) {
