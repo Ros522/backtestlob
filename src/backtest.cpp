@@ -44,9 +44,12 @@ private:
     long long price_factor;
     long long size_factor;
 
+    double taker_fee;  // % (例: 0.001 = 0.1%)
+    double maker_fee;
+
 public:
-    BackTestEnv(int price_scale_=0, int size_scale_=0)
-        : price_scale(price_scale_), size_scale(size_scale_) {
+    BackTestEnv(int price_scale_=0, int size_scale_=0, double taker_fee_=0.0, double maker_fee_=0.0)
+        : price_scale(price_scale_), size_scale(size_scale_), taker_fee(taker_fee_), maker_fee(maker_fee_) {
         price_factor = 1;
         for (int i=0; i<price_scale; i++) price_factor *= 10;
         size_factor = 1;
@@ -66,7 +69,7 @@ public:
 
     std::map<long, Order> get_orders() { return orders; }
 
-    long long add_position(Order neworder) {
+    long long add_position(Order neworder, bool is_taker) {
         long long profit = 0;
         if (this->position.side >= Side::BUY) {
             if (neworder.side == this->position.side) {
@@ -108,6 +111,13 @@ public:
         else {
             this->position = { neworder.side,neworder.size,neworder.price };
         }
+
+        // 手数料計算
+        double fee_rate = is_taker ? taker_fee : maker_fee;
+        long long notional = neworder.price * neworder.size;  // 内部整数
+        double fee = fee_rate * ( (double)notional / (price_factor * size_factor) );
+        profit -= (long long)std::llround(fee * price_factor);  // 内部利益に換算
+
         return profit;
     }
 
@@ -124,12 +134,12 @@ public:
                 case OrderType::LIMIT:
                     if (o.side == Side::SELL && o.price < high_i) {
                         trade++;
-                        profit += this->add_position(o);
+                        profit += this->add_position(o, false); // maker
                         it = this->orders.erase(it);
                     }
                     else if (o.side == Side::BUY && o.price > low_i) {
                         trade++;
-                        profit += this->add_position(o);
+                        profit += this->add_position(o, false); // maker
                         it = this->orders.erase(it);
                     }
                     else {
@@ -138,7 +148,7 @@ public:
                     break;
                 case OrderType::MARKET:
                     trade++;
-                    profit += this->add_position(o);
+                    profit += this->add_position(o, true); // taker
                     it = this->orders.erase(it);
                     break;
             }
@@ -158,12 +168,12 @@ public:
                 case OrderType::LIMIT:
                     if (side == Side::BUY && o.side == Side::SELL && o.price < price_i) {
                         trade++;
-                        profit += this->add_position(o);
+                        profit += this->add_position(o, false); // maker
                         it = this->orders.erase(it);
                     }
                     else if (side == Side::SELL && o.side == Side::BUY && o.price > price_i) {
                         trade++;
-                        profit += this->add_position(o);
+                        profit += this->add_position(o, false); // maker
                         it = this->orders.erase(it);
                     }
                     else {
@@ -174,7 +184,7 @@ public:
                     if(o.side == side) {
                         trade++;
                         o.price = price_i;
-                        profit += this->add_position(o);
+                        profit += this->add_position(o, true); // taker
                         it = this->orders.erase(it);
                     }
                     else {
@@ -222,7 +232,11 @@ PYBIND11_MODULE(backtestlob, m) {
         .def_readwrite("price", &BackTestEnv::Order::price);
 
     py::class_<BackTestEnv>(m, "BackTestEnv")
-        .def(py::init<int,int>(), py::arg("price_scale")=0, py::arg("size_scale")=0)
+        .def(py::init<int,int,double,double>(),
+             py::arg("price_scale")=0,
+             py::arg("size_scale")=0,
+             py::arg("taker_fee")=0.0,
+             py::arg("maker_fee")=0.0)
         .def_property_readonly("side", &BackTestEnv::get_position_side)
         .def_property_readonly("size", &BackTestEnv::get_position_size)
         .def_property_readonly("price", &BackTestEnv::get_position_price)
