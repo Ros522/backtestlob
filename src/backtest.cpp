@@ -69,6 +69,9 @@ public:
 
     std::map<long, Order> get_orders() { return orders; }
 
+    std::vector<std::tuple<long, Order, long>> get_pending_orders() {
+        return pending_orders;
+    }
     long long add_position(Order neworder, bool is_taker) {
         long long profit = 0;
         if (this->position.side >= Side::BUY) {
@@ -122,6 +125,9 @@ public:
     }
 
     std::tuple<double, int> step(double low, double high) {
+        timestep++;          // 時間を進める
+        flush_pending();     // 遅延注文を反映
+
         auto it = this->orders.begin();
         int trade = 0;
         long long profit = 0;
@@ -196,13 +202,28 @@ public:
         return std::make_tuple(to_external_price(profit), trade);
     }
 
+    // --- 新規注文 ---
     long entry(OrderType type ,Side side, double size, double price) {
         Order o = { type, side, to_internal_size(size), to_internal_price(price) };
         this->seq++;
-        orders[this->seq] = o;
+        // すぐには板に載せず、pendingに入れる
+        pending_orders.push_back({this->seq, o, timestep});
         return this->seq;
     };
 
+    // --- step処理前に pending → orders へ移す ---
+    void flush_pending() {
+        auto it = pending_orders.begin();
+        while (it != pending_orders.end()) {
+            auto [id, o, t] = *it;
+            if (timestep - t >= delay_timestep) {
+                orders[id] = o;
+                it = pending_orders.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
     int cancel(long id) {
         if (orders.count(id) == 0) return -1;
         orders.erase(id);
@@ -236,11 +257,13 @@ PYBIND11_MODULE(backtestlob, m) {
              py::arg("price_scale")=0,
              py::arg("size_scale")=0,
              py::arg("taker_fee")=0.0,
-             py::arg("maker_fee")=0.0)
+             py::arg("maker_fee")=0.0,
+             py::arg("delay_timestep")=0)
         .def_property_readonly("side", &BackTestEnv::get_position_side)
         .def_property_readonly("size", &BackTestEnv::get_position_size)
         .def_property_readonly("price", &BackTestEnv::get_position_price)
         .def("get_orders", &BackTestEnv::get_orders)
+        .def("get_pending_orders", &BackTestEnv::get_pending_orders)   // ←追加
         .def("step", &BackTestEnv::step)
         .def("step_by_tick", &BackTestEnv::step_by_tick)
         .def("entry", &BackTestEnv::entry)
