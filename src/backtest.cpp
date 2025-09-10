@@ -37,7 +37,10 @@ public:
 private:
     Position position = { Side::UNDEF,0,0 };
     std::map<long,Order> orders;
+    std::vector<std::tuple<long,Order,long>> pending_orders; 
     long seq = 0;
+    long long timestep = 0;     // シミュレーションの時間
+    int delay_timestep = 0;     // 遅延ティック数
 
     int price_scale;
     int size_scale;
@@ -48,8 +51,12 @@ private:
     double maker_fee;
 
 public:
-    BackTestEnv(int price_scale_=0, int size_scale_=0, double taker_fee_=0.0, double maker_fee_=0.0)
-        : price_scale(price_scale_), size_scale(size_scale_), taker_fee(taker_fee_), maker_fee(maker_fee_) {
+    BackTestEnv(int price_scale_=0, int size_scale_=0,
+                double taker_fee_=0.0, double maker_fee_=0.0,
+                int delay_timestep_=0)
+        : price_scale(price_scale_), size_scale(size_scale_),
+          taker_fee(taker_fee_), maker_fee(maker_fee_),
+          delay_timestep(delay_timestep_) {
         price_factor = 1;
         for (int i=0; i<price_scale; i++) price_factor *= 10;
         size_factor = 1;
@@ -253,7 +260,7 @@ PYBIND11_MODULE(backtestlob, m) {
         .def_readwrite("price", &BackTestEnv::Order::price);
 
     py::class_<BackTestEnv>(m, "BackTestEnv")
-        .def(py::init<int,int,double,double>(),
+        .def(py::init<int,int,double,double,int>(),
              py::arg("price_scale")=0,
              py::arg("size_scale")=0,
              py::arg("taker_fee")=0.0,
