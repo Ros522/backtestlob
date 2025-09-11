@@ -131,20 +131,19 @@ public:
         return profit;
     }
 
-    std::tuple<double, int, std::vector<long>> step(double low, double high) {
+    std::tuple<double, int, std::vector<Order>> step(double low, double high) {
         timestep++;          // 時間を進める
         flush_pending();     // 遅延注文を反映
 
         auto it = this->orders.begin();
         int trade = 0;
         long long profit = 0;
-        std::vector<long> filled_ids;   // ← 追加
+        std::vector<Order> filled_orders;   // ← 追加
 
         long long low_i = to_internal_price(low);
         long long high_i = to_internal_price(high);
 
         while(it != this->orders.end()) {
-            long id = it->first;   // ← 注文IDを控える
             Order o = it->second;
 
             switch (o.type) {
@@ -152,13 +151,13 @@ public:
                     if (o.side == Side::SELL && o.price < high_i) {
                         trade++;
                         profit += this->add_position(o, false); // maker
-                        filled_ids.push_back(id);               // ← IDを追加
+                        filled_orders.push_back(o);             // ← 注文そのものを追加
                         it = this->orders.erase(it);
                     }
                     else if (o.side == Side::BUY && o.price > low_i) {
                         trade++;
                         profit += this->add_position(o, false); // maker
-                        filled_ids.push_back(id);               // ← IDを追加
+                        filled_orders.push_back(o);
                         it = this->orders.erase(it);
                     }
                     else {
@@ -168,13 +167,13 @@ public:
                 case OrderType::MARKET:
                     trade++;
                     profit += this->add_position(o, true); // taker
-                    filled_ids.push_back(id);              // ← IDを追加
+                    filled_orders.push_back(o);
                     it = this->orders.erase(it);
                     break;
             }
         }
 
-        return std::make_tuple(to_external_price(profit), trade, filled_ids);
+        return std::make_tuple(to_external_price(profit), trade, filled_orders);
     }
 
     std::tuple<double, int> step_by_tick(Side side, double price) {
