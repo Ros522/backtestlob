@@ -278,6 +278,10 @@ PYBIND11_MODULE(backtestlob, m) {
         .def_readwrite("size", &BackTestEnv::Order::size)
         .def_readwrite("price", &BackTestEnv::Order::price);
 
+    py::class_<BackTestEnv::PendingOrder>(m, "PendingOrder")
+        .def_readonly("id", &BackTestEnv::PendingOrder::id)
+        .def_readonly("o", &BackTestEnv::PendingOrder::o)
+        .def_readonly("ready_seq", &BackTestEnv::PendingOrder::ready_seq);
     py::class_<BackTestEnv>(m, "BackTestEnv")
         .def(py::init<int,int,double,double>(),
              py::arg("price_scale")=0,
