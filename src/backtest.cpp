@@ -178,6 +178,9 @@ public:
     }
 
     std::tuple<double, int> step_by_tick(Side side, double price) {
+        timestep++;          // 時間を進める
+        flush_pending();     // 遅延注文を反映
+
         auto it = this->orders.begin();
         int trade = 0;
         long long profit = 0;
