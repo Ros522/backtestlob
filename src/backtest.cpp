@@ -177,27 +177,31 @@ public:
         return std::make_tuple(to_external_price(profit), trade, filled_ids);
     }
 
-    std::tuple<double, int> step_by_tick(Side side, double price) {
+    std::tuple<double, int, std::vector<long> step_by_tick(Side side, double price) {
         timestep++;          // 時間を進める
         flush_pending();     // 遅延注文を反映
 
         auto it = this->orders.begin();
         int trade = 0;
         long long profit = 0;
+        std::vector<long> filled_ids;   // ← 追加
         long long price_i = to_internal_price(price);
 
         while (it != this->orders.end()) {
+            long id = it->first;   // ← 注文IDを控える
             Order o = it->second;
             switch (o.type) {
                 case OrderType::LIMIT:
                     if (side == Side::BUY && o.side == Side::SELL && o.price < price_i) {
                         trade++;
                         profit += this->add_position(o, false); // maker
+                        filled_ids.push_back(id);               // ← IDを追加
                         it = this->orders.erase(it);
                     }
                     else if (side == Side::SELL && o.side == Side::BUY && o.price > price_i) {
                         trade++;
                         profit += this->add_position(o, false); // maker
+                        filled_ids.push_back(id);               // ← IDを追加
                         it = this->orders.erase(it);
                     }
                     else {
@@ -209,6 +213,7 @@ public:
                         trade++;
                         o.price = price_i;
                         profit += this->add_position(o, true); // taker
+                        filled_ids.push_back(id);               // ← IDを追加
                         it = this->orders.erase(it);
                     }
                     else {
@@ -217,7 +222,7 @@ public:
                     break;
             }
         }
-        return std::make_tuple(to_external_price(profit), trade);
+        return std::make_tuple(to_external_price(profit), trade, filled_ids);
     }
 
     // --- 新規注文 ---
