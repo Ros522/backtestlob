@@ -177,7 +177,7 @@ public:
         return std::make_tuple(to_external_price(profit), trade, filled_ids);
     }
 
-    std::tuple<double, int, std::vector<long> step_by_tick(Side side, double price) {
+    std::tuple<double, int, std::vector<long>> step_by_tick(Side side, double price) {
         timestep++;          // 時間を進める
         flush_pending();     // 遅延注文を反映
 
