@@ -212,16 +212,11 @@ public:
                     }
                     break;
                 case OrderType::MARKET:
-                    if(o.side == side) {
-                        trade++;
-                        o.price = price_i;
-                        profit += this->add_position(o, true); // taker
-                        filled_ids.push_back(id);               // ← IDを追加
-                        it = this->orders.erase(it);
-                    }
-                    else {
-                        it++;
-                    }
+                    trade++;
+                    o.price = price_i;
+                    profit += this->add_position(o, true); // taker
+                    filled_ids.push_back(id);               // ← IDを追加
+                    it = this->orders.erase(it);
                     break;
             }
         }
