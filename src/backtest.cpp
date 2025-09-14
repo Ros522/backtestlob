@@ -26,12 +26,12 @@ public:
         Side side;
         long long size;   // 内部整数（サイズ用スケーリング）
         long long price;  // 内部整数（価格用スケーリング）
-        long ready_seq;  // 外部シーケンスで有効になるタイミング
+        long long ready_seq;  // 外部シーケンスで有効になるタイミング
     };
     struct PendingOrder {
         long id;
         Order o;
-        long ready_seq;
+        long long ready_seq;
     };
 
     struct Position {
@@ -134,7 +134,7 @@ public:
         return profit;
     }
 
-    std::tuple<double, int, std::vector<long>> step(double low, double high, long current_seq) {
+    std::tuple<double, int, std::vector<long>> step(double low, double high, long long current_seq) {
         timestep++;          // 時間を進める
         flush_pending(current_seq);     // 遅延注文を反映
 
@@ -180,7 +180,7 @@ public:
         return std::make_tuple(to_external_price(profit), trade, filled_ids);
     }
 
-    std::tuple<double, int, std::vector<long>> step_by_tick(Side side, double price, long current_seq) {
+    std::tuple<double, int, std::vector<long>> step_by_tick(Side side, double price, long long current_seq) {
         timestep++;          // 時間を進める
         flush_pending(current_seq);     // 遅延注文を反映
 
@@ -223,7 +223,7 @@ public:
     }
 
     // --- 新規注文 ---
-    long entry(OrderType type ,Side side, double size, double price, long ready_seq) {
+    long entry(OrderType type ,Side side, double size, double price, long long ready_seq) {
         Order o = { type, side, to_internal_size(size), to_internal_price(price) };
         this->seq++;
         // すぐには板に載せず、pendingに入れる
@@ -232,7 +232,7 @@ public:
     };
 
     // --- step処理前に pending → orders へ移す ---
-    void flush_pending(long current_seq) {
+    void flush_pending(long long current_seq) {
         auto it = pending_orders.begin();
         while (it != pending_orders.end()) {
             if (current_seq >= it->ready_seq) {
