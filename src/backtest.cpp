@@ -167,13 +167,11 @@ public:
                     else {
                         it++;
                     }
-                    break;
                 case OrderType::MARKET:
                     trade++;
                     profit += this->add_position(o, true); // taker
                     filled_ids.push_back(id);              // ← IDを追加
                     it = this->orders.erase(it);
-                    break;
             }
         }
 
@@ -210,14 +208,12 @@ public:
                     else {
                         it++;
                     }
-                    break;
                 case OrderType::MARKET:
                     trade++;
                     o.price = price_i;
                     profit += this->add_position(o, true); // taker
                     filled_ids.push_back(id);               // ← IDを追加
                     it = this->orders.erase(it);
-                    break;
             }
         }
         return std::make_tuple(to_external_price(profit), trade, filled_ids);
