@@ -87,10 +87,15 @@ public:
         if (this->position.side >= Side::BUY) {
             if (neworder.side == this->position.side) {
                 long long sum_size = this->position.size + neworder.size;
-                long long newprice =
-                    (this->position.size * this->position.price +
-                     neworder.size * neworder.price) / sum_size;
-                this->position = { neworder.side, sum_size, newprice };
+                if (sum_size > 0) {
+                    long long newprice =
+                        (this->position.size * this->position.price +
+                        neworder.size * neworder.price) / sum_size;
+                    this->position = { neworder.side, sum_size, newprice };
+                } else {
+                    // サイズゼロならポジションを解消
+                    this->position = { Side::UNDEF, 0, 0 };
+                }
             }
             else if (neworder.side == Side::BUY && this->position.side == Side::SELL) {
                 long long after_size = this->position.size - neworder.size;
