@@ -5,6 +5,7 @@
 #include <tuple>
 #include <cstdlib>
 #include <cstdint>
+#include <vector>
 
 namespace py = pybind11;
 
@@ -34,6 +35,12 @@ public:
         long long ready_seq;
     };
 
+    // 新：キャンセルを pending にするための構造体
+    struct PendingCancel {
+        long target_id;       // キャンセル対象の注文ID
+        long long ready_seq;  // いつ反映するか（シーケンス）
+    };
+
     struct Position {
         Side side;
         long long size;
@@ -44,6 +51,9 @@ private:
     Position position = { Side::UNDEF,0,0 };
     std::map<long,Order> orders;
     std::vector<PendingOrder> pending_orders; 
+    std::vector<PendingCancel> pending_cancels; // ← 追加
+    std::vector<long long> pending_cancel_all;  // cancel_all の遅延リスト（複数あり得る）
+
     long seq = 0;
     long long timestep = 0;     // シミュレーションの時間
 
@@ -141,7 +151,7 @@ public:
 
     std::tuple<double, int, std::vector<long>> step(double low, double high, long long current_seq) {
         timestep++;          // 時間を進める
-        flush_pending(current_seq);     // 遅延注文を反映
+        flush_pending(current_seq);     // 遅延注文/遅延キャンセルを反映
 
         auto it = this->orders.begin();
         int trade = 0;
@@ -187,7 +197,7 @@ public:
 
     std::tuple<double, int, std::vector<long>> step_by_tick(Side side, double price, long long current_seq) {
         timestep++;          // 時間を進める
-        flush_pending(current_seq);     // 遅延注文を反映
+        flush_pending(current_seq);     // 遅延注文/遅延キャンセルを反映
 
         auto it = this->orders.begin();
         int trade = 0;
@@ -229,7 +239,7 @@ public:
 
     // --- 新規注文 ---
     long entry(OrderType type ,Side side, double size, double price, long long ready_seq) {
-        Order o = { type, side, to_internal_size(size), to_internal_price(price) };
+        Order o = { type, side, to_internal_size(size), to_internal_price(price), ready_seq };
         this->seq++;
         // すぐには板に載せず、pendingに入れる
         pending_orders.push_back({this->seq, o, ready_seq});
@@ -247,15 +257,55 @@ public:
                 ++it;
             }
         }
+
+        // 2) pending_cancels を処理 (cancel for specific id)
+        auto itc = pending_cancels.begin();
+        while (itc != pending_cancels.end()) {
+            if (current_seq >= itc->ready_seq) {
+                // ready になったら対象注文を削除（存在しなければスキップ）
+                if (orders.count(itc->target_id) > 0) {
+                    orders.erase(itc->target_id);
+                }
+                itc = pending_cancels.erase(itc);
+            } else {
+                ++itc;
+            }
+        }
+
+        // 3) pending_cancel_all を処理 (遅延された cancel_all)
+        auto itca = pending_cancel_all.begin();
+        while (itca != pending_cancel_all.end()) {
+            if (current_seq >= *itca) {
+                orders.clear();
+                itca = pending_cancel_all.erase(itca);
+            } else {
+                ++itca;
+            }
+        }
     }
     
-    int cancel(long id) {
+    // --- cancel: デフォルトは即時（互換）だが ready_seq を与えれば遅延キャンセル ---
+    // ready_seq < 0 : immediate (従来の挙動)
+    int cancel(long id, long long ready_seq = -1) {
+        if (ready_seq < 0) {
         if (orders.count(id) == 0) return -1;
         orders.erase(id);
         return 0;
+        } else {
+            // 遅延キャンセルを積む（存在チェックは反映時に行う）
+            pending_cancels.push_back({id, ready_seq});
+            return 0;
+        }
     };
 
-    void cancel_all() { orders.clear(); };
+    // cancel_all も同様に遅延可能（ready_seq < 0 で即時）
+    void cancel_all(long long ready_seq = -1) {
+        if (ready_seq < 0) {
+            orders.clear();
+        } else {
+            pending_cancel_all.push_back(ready_seq);
+        }
+    };
 };
 
 PYBIND11_MODULE(backtestlob, m) {
@@ -273,9 +323,11 @@ PYBIND11_MODULE(backtestlob, m) {
 
     py::class_<BackTestEnv::Order>(m, "Order")
         .def(py::init<>())
+        .def_readwrite("type", &BackTestEnv::Order::type)
         .def_readwrite("side", &BackTestEnv::Order::side)
         .def_readwrite("size", &BackTestEnv::Order::size)
-        .def_readwrite("price", &BackTestEnv::Order::price);
+        .def_readwrite("price", &BackTestEnv::Order::price)
+        .def_readwrite("ready_seq", &BackTestEnv::Order::ready_seq);
 
     py::class_<BackTestEnv::PendingOrder>(m, "PendingOrder")
         .def_readonly("id", &BackTestEnv::PendingOrder::id)
@@ -302,6 +354,8 @@ PYBIND11_MODULE(backtestlob, m) {
         .def("step_by_tick", &BackTestEnv::step_by_tick,
             py::arg("side"), py::arg("price"),
             py::arg("current_seq"))
-        .def("cancel", &BackTestEnv::cancel)
-        .def("cancel_all", &BackTestEnv::cancel_all);
+        .def("cancel", &BackTestEnv::cancel,
+             py::arg("id"), py::arg("ready_seq") = -1)
+        .def("cancel_all", &BackTestEnv::cancel_all,
+             py::arg("ready_seq") = -1);
 }
